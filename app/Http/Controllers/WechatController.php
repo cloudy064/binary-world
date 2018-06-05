@@ -23,7 +23,7 @@ class WechatController extends Controller {
         $app = app('wechat.official_account');
 
         $app->server->push(function ($message) {
-            return "欢迎关注Binary World! {$message}";
+            return "欢迎关注Binary World!";
         });
 
         return $app->server->serve();
