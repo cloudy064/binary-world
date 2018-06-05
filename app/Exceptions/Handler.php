@@ -3,7 +3,13 @@
 namespace App\Exceptions;
 
 use Exception;
+use Illuminate\Auth\AuthenticationException;
+use Illuminate\Contracts\Support\Responsable;
+use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Foundation\Exceptions\Handler as ExceptionHandler;
+use Illuminate\Http\Exceptions\HttpResponseException;
+use Illuminate\Routing\Router;
+use Illuminate\Validation\ValidationException;
 
 class Handler extends ExceptionHandler
 {
@@ -41,11 +47,40 @@ class Handler extends ExceptionHandler
      * Render an exception into an HTTP response.
      *
      * @param  \Illuminate\Http\Request  $request
-     * @param  \Exception  $exception
+     * @param  \Exception  $e
      * @return \Illuminate\Http\Response
      */
-    public function render($request, Exception $exception)
+    public function render($request, Exception $e)
     {
-        return parent::render($request, $exception);
+        if (method_exists($e, 'render') && $response = $e->render($request)) {
+            return Router::toResponse($request, $response);
+        } elseif ($e instanceof Responsable) {
+            return $e->toResponse($request);
+        } else if ($e instanceof ModelNotFoundException) {
+            $id_range = "(" . join(',', $e->getIds()) . ")";
+            return response()->json([
+                'code' => $e->getCode(),
+                'message' => "{$e->getModel()} in {$id_range}  not found"
+            ]);
+        }
+
+        $e = $this->prepareException($e);
+
+        if ($e instanceof HttpResponseException) {
+            return $e->getResponse();
+        } elseif ($e instanceof AuthenticationException) {
+            return response()->json([
+                'code' => 401,
+                'message' => $e->getMessage()
+            ]);
+        } elseif ($e instanceof ValidationException) {
+            if ($e->response) {
+                return $e->response;
+            }
+
+            return $this->invalidJson($request, $e);
+        }
+
+        return $this->prepareJsonResponse($request, $e);
     }
 }
